@@ -61,8 +61,11 @@ async def index_documents_async(documents:List[Document], batch_size:int=50):
         return True
 
     # Create a list of tasks for all batches
-    tasks = [add_batch(batch, i+1) for i, batch in enumerate(batches)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Keep one shared Pinecone async session open for all concurrent batches;
+    # otherwise each aadd_documents call closes the shared session when it finishes
+    async with vectorstore:
+        tasks = [add_batch(batch, i+1) for i, batch in enumerate(batches)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
     #Count succcessful batches
     successful = sum(1 for result in results if result is True)
@@ -104,7 +107,7 @@ async def main():
     log_success(f"Text Splitter: Created {len(splitted_docs)} chunks from {len(documents)} documents")
 
     #Process documents asynchronously
-    await index_documents_async(splitted_docs, batch_size=500)
+    await index_documents_async(splitted_docs, batch_size=5)
 
     log_header()
     log_success("Documentation ingestion pipeline finished successfully!")
